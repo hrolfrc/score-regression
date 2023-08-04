@@ -1,12 +1,15 @@
 """
-This is the Calf classifier
+The ScoreRegression and ScoreRegressionCV classifiers
 
 """
+import functools
+
 import numpy as np
+from scipy.optimize import minimize
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.datasets import make_classification
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import minmax_scale
@@ -14,25 +17,11 @@ from sklearn.utils.multiclass import unique_labels
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 
-def get_small_classification():
-    """ Make a classification problem for visual inspection. """
-    X, y = make_classification(
-        n_samples=10,
-        n_features=3,
-        n_informative=2,
-        n_redundant=1,
-        n_classes=2,
-        hypercube=True,
-        random_state=8
-    )
-    return X, y
-
-
 def predict(X, w):
     return np.sum(np.multiply(X, w), 1)
 
 
-def hv_candidate(X, y, w, c):
+def objective(X, y, w):
     """ Find the auc of the weights and candidate vertex.
 
     Arguments:
@@ -40,7 +29,6 @@ def hv_candidate(X, y, w, c):
             The training input features and samples.
         y : ground truth vector
         w : vetted weights
-        c : candidate weight
 
         Examples:
             >>> from sklearn.datasets import make_classification
@@ -48,85 +36,216 @@ def hv_candidate(X, y, w, c):
             # Make a classification problem
             With 3 features in X, we pass w [1, -1] and the candidate 1
             >>> X_d, y_d = make_classification(n_samples=10, n_features=3, n_informative=2, n_redundant=1, n_repeated=0, n_classes=2, random_state=42)
-            >>> auc_d = hv_candidate(X_d, y_d, [1, -1], 1)
+            >>> auc_d = objective(X_d, y_d, [1, -1])
             >>> np.round(auc_d, 2)
             0.08
 
     """
-    assert X.shape[1] - 1 == len(w), "X or w have the wrong shape"
-    y_p = predict(X, w + [c])
     try:
-        auc = roc_auc_score(y_true=y, y_score=y_p)
+        auc = roc_auc_score(y_true=y, y_score=predict(X, w))
     except ValueError:
         auc = 0
-    return auc
+
+    return -auc
 
 
-def hv_max(X, y, w, c):
-    """Find the weight in b that maximizes auc
+def opt_auc(X, y):
+    """Find the weight that maximizes auc.
+
+    Negate the auc from hv_candidate as hv_candidate_min
+    because we are minimizing.  Then negate the function value
+    upon return.
 
     Arguments:
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
-        w : vetted weights
-        c : a list of candidate weights
 
     Examples:
-        >>> X_d, y_d = get_small_classification()
-        >>> rb_d = ScoreRegression()
-        >>> kfold_d = StratifiedKFold(n_splits=5)
+        >>> from sklearn.datasets import make_classification
 
-        # hypercube vertex approximation
-        >>> auc_d, w_d = hv_max(X_d, y_d, [1, -1], [1, -1])
-        >>> np.round((auc_d, w_d), 2)
-        array([ 0.16, -1.  ])
+        # Make a classification problem
+        With 3 features in X, we pass w [1, -1] and the candidate 1
+        >>> X_d, y_d = make_classification(
+        ...    n_samples=10,
+        ...    n_features=3,
+        ...    n_informative=2,
+        ...    n_redundant=1,
+        ...    n_classes=2,
+        ...    random_state=8
+        ... )
 
-        # granular approximation
-        >>> import numpy
-        >>> auc_d, w_d = hv_max(X_d, y_d, [1, -1], numpy.arange(-1, 1, .1))
-        >>> np.round((auc_d, w_d), 2)
-        array([ 0.16, -0.8 ])
+        >>> y_d
+        array([0, 0, 1, 1, 0, 1, 1, 0, 0, 1])
 
-        We get a higher auc by allowing the range to be off the vertices of the cube
-        >>> auc_d, w_d = hv_max(X_d, y_d, [1, -1], numpy.arange(-2, 2, .1))
-        >>> np.round((auc_d, w_d), 2)
-        array([ 0.36, -1.9 ])
+        >>> auc_d, opt_w_d = opt_auc(X_d, y_d)
+        >>> np.round(auc_d, 2)
+        0.2
+
+        >>> np.round(opt_w_d, 2)
+        -1.06
+
+        >>> v = [1, -1] + [opt_w_d]
+        >>> np.round(v, 2).tolist()
+        [1.0, -1.0, -1.06]
+
+        >>> y_score = np.sum(X_d * v, axis=1)
+        >>> round(roc_auc_score(y_true=y_d, y_score=y_score), 2)
+        0.16
+
+        >>> import pprint
+        >>> pprint.pprint(list(zip(y_d, y_score)))
+        [(0, 5.16000807904542),
+         (0, 1.616091591312219),
+         (1, -2.612399203712827),
+         (1, -1.0885808855579375),
+         (0, 0.1260321126870083),
+         (1, -2.9165243290179848),
+         (1, 0.025875162884451464),
+         (0, -1.3242115107804242),
+         (0, -2.441252084537912),
+         (1, -2.9968811104312167)]
 
     """
-    res = [(hv_candidate(X, y, w, v), v) for v in c]
-    return sorted(res, reverse=True)[0]
+    print('starting opt_auc')
+    # define the partial function for the optimization
+    # of auc over a weight range.
+    try:
+        res = minimize(
+            functools.partial(
+                objective,
+                X, y
+            ),
+            x0=np.random.default_rng().uniform(-1, 1, X.shape[1]),
+            method='powell',
+            options={'xtol': 1e-6, 'maxiter': 1e4, 'disp': False}
+        )
+    except ValueError:
+        # powell can raise a ValueError, in which case
+        # return auc == 0 and the initial condition, x0,
+        # as a reasonable guess for w. The feature will be
+        # skipped anyway because of the low auc.
+        opt_fun, opt_w = 0, [0] * len(y)
+        pass
+    else:
+        # res.x is an array, such as array([-1.05572788])
+        # return a float
+        opt_fun, opt_w = -res.fun, res.x[0]
+
+    print('finished opt_auc')
+    return opt_fun, opt_w
 
 
-# noinspection PyAttributeOutsideInit,PyUnresolvedReferences
-def fit_hv(X, y, grid):
-    """ Find the weights that best fit X using hypercube vertices
+def phase_1_best_tuples(X, y):
+    """ Get the best tuples according to AUC.
+
+    Total optimizations: k(n + 1) - (1/2)k(k + 1)
+    In phase 2, there are nk - k/2(k + 1) optimizations
+    where n is the number of features and k = n-1.
+    These should be parallelized using a queue.
+
+    In phase 3, there are n-1 optimizations.
+    These should be parallelized and follow from the phase 2
+    optimizations.
+
+    Arguments:
+        X : array-like, shape (n_samples, n_features)
+            The training input features and samples.
+        y : ground truth vector
+
+    Returns:
+        weights
 
         Examples:
-            Make a classification problem
-            With 3 features in X, we pass w [1, -1] and the candidate 1
-            >>> X_d, y_d = get_small_classification()
-            >>> w_d = fit_hv(X_d, y_d, [-1, 1])
-            >>> w_d
-            [1, 1, 1]
+            >>> from sklearn.datasets import make_classification
+            >>> from sklearn.linear_model import LogisticRegression
+            >>> from sklearn.metrics import roc_auc_score
+            >>> import numpy
 
+            # Make a classification problem
+            >>> X_d, y_d = make_classification(
+            ...    n_samples=20,
+            ...    n_features=5,
+            ...    n_informative=2,
+            ...    n_redundant=1,
+            ...    n_classes=2,
+            ...    hypercube=True,
+            ...    random_state=8
+            ... )
+
+            ==================================================
+            Get and round the logistic regression probabilities
+            >>> clf = LogisticRegression(max_iter=10000)
+            >>> lp = clf.fit(X_d, y_d).predict_proba(X_d)
+            >>> lpr = np.round(lp, 2).tolist()
+
+            auc can be predicted by predict or column 1 of predict_prob
+            accuracy can be predicted by predict, requiring integers
+            >>> auc_pp = roc_auc_score(y_true=y_d, y_score=clf.fit(X_d, y_d).predict_proba(X_d)[:, 1])
+            >>> auc_p = roc_auc_score(y_true=y_d, y_score=clf.fit(X_d, y_d).predict(X_d))
+            >>> np.round((auc_pp, auc_p), 3)
+            array([0.9, 0.8])
+
+            >>> len(y_d)
+
+            >>> best_d = phase_1_best_tuples(X_d, y_d)
+            >>> import pprint
+            >>> pprint.pprint(best_d)
+            [[0.9, [1], [0.47213661937437423]],
+             [0.9, [1, 4], [0.47213661937437423, 1.999999537971335]],
+             [0.75, [1, 4, 2], [0.47213661937437423, 1.999999537971335, 1.999999531661524]],
+             [0.75,
+              [1, 4, 2, 3],
+              [0.47213661937437423,
+               1.999999537971335,
+               1.999999531661524,
+               1.9999995385610347]],
+             [0.75,
+              [1, 4, 2, 3, 0],
+              [0.47213661937437423,
+               1.999999537971335,
+               1.999999531661524,
+               1.9999995385610347,
+               1.9999995297688367]]]
     """
-    feature_range = range(X.shape[1])
-    w = []
-    auc = []
-    for i in feature_range:
-        X_c = X[:, 0:i + 1]
+    print('starting phase_1_best_tuples')
+    # feature range is the column index
+    feature_range = list(range(X.shape[1]))
 
-        # granular approximation
-        max_auc, w_c = hv_max(X_c, y, w, grid)
+    # taken columns are the columns that have been chosen
+    # for high auc.  Available columns are those not taken.
+    taken = []
+    weight = []
+    best = []
+    best_auc = []
 
-        # if the auc goes down then we skip the feature by weighting it at 0
-        if auc and max_auc <= max(auc):
-            w = w + [0]
+    while available := set(feature_range).difference(set(taken)):
+        print('available ', available)
+        candidates = []
+
+        for col in available:
+            print('column is ', col)
+            print('taken ', taken)
+            X_c = X[:, taken + [col]]
+            auc, w_c = opt_auc(X_c, y)
+            # print('auc ', auc, ', w_c ', w_c)
+            candidates += [(auc, col, w_c)]
+
+        winner = sorted(candidates, reverse=True)[0]
+        taken.append(winner[1])
+        weight.append(winner[2])
+        max_auc = winner[0]
+        if best_auc and max_auc <= max(best_auc):
+            taken = feature_range.copy()
         else:
-            w = w + [w_c]
-        auc = auc + [max_auc]
-    return w
+            best_auc += [max_auc]
+            best.append([max_auc, taken.copy(), weight.copy()])
+        print('best auc ', max_auc)
+        print('best columns ', winner[1])
+
+    print('finished phase_1_best_tuples')
+
+    return best
 
 
 # noinspection PyAttributeOutsideInit
@@ -143,7 +262,33 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         self.classes_ = unique_labels(y)
         self.X_ = X
         self.y_ = y
-        self.w_ = fit_hv(X, y, grid=self.grid)
+        self.feature_range_ = list(range(X.shape[1]))
+        self.sample_range_ = list(range(X.shape[0]))
+        self.progress_ = {}
+
+        # ===================================================
+        #                   Phase 1
+        #   Find the features that increase AUC.
+        # ===================================================
+        best = phase_1_best_tuples(X, y)
+        self.progress_['phase_1'] = {}
+        self.progress_['phase_1']['best_outcomes'] = best
+
+        # get the best outcome for phase 1
+        # sort on AUC first and if there is a tie, choose the
+        # more parsimonious solution.
+        winner = sorted(best, reverse=True)[0]
+        self.progress_['phase_1']['auc'] = winner[0]
+        self.progress_['phase_1']['columns'] = winner[1]
+        self.progress_['phase_1']['weights'] = winner[2]
+
+        # get the best outcome over all column subsets
+        # the winning features are likely to be a subset of
+        # all features.
+        self.auc_ = winner[0]
+        self.columns_ = winner[1]
+        self.w_ = winner[2]
+
         self.is_fitted_ = True
         self.coef_ = self.w_
         return self
@@ -154,7 +299,7 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         X = self._validate_data(X, accept_sparse="csr", reset=False)
         scores = np.array(
             minmax_scale(
-                predict(X, self.w_),
+                predict(X[:, self.columns_], self.w_),
                 feature_range=(-1, 1)
             )
         )
