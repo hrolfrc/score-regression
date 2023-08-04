@@ -71,5 +71,5 @@ axs[2].hist(diff)
 axs[2].set_ylabel('AUC difference')
 stats = pd.DataFrame(diff).describe().loc[['mean', 'std']].to_string(header=False)
 axs[2].text(.1, 2, stats)
-fig.set_size_inches(18.5, 20)
+plt.tight_layout = False
 plt.show()
