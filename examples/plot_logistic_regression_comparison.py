@@ -23,13 +23,13 @@ score_regression_auc = []
 score_regression_acc = []
 
 rng = np.random.RandomState(11)
-for _ in range(20):
+for _ in range(3):
     # Make a classification problem
     X, y_d = make_classification(
         n_samples=100,
         n_features=20,
-        n_informative=10,
-        n_redundant=5,
+        n_informative=5,
+        n_redundant=3,
         n_classes=2,
         hypercube=True,
         random_state=rng
@@ -38,9 +38,10 @@ for _ in range(20):
     X_d = scaler.fit_transform(X)
 
     for desc, clf in [('logit', LogisticRegression(max_iter=10000)), ('ScoreRegression', ScoreRegression())]:
-        lp = clf.fit(X_d, y_d).predict_proba(X_d)
-        auc = roc_auc_score(y_true=y_d, y_score=clf.fit(X_d, y_d).predict_proba(X_d)[:, 1])
-        acc = accuracy_score(y_true=y_d, y_pred=clf.fit(X_d, y_d).predict(X_d))
+        # lp = clf.fit(X_d, y_d).predict_proba(X_d)
+        clf.fit(X_d, y_d)
+        auc = roc_auc_score(y_true=y_d, y_score=clf.predict_proba(X_d)[:, 1])
+        acc = accuracy_score(y_true=y_d, y_pred=clf.predict(X_d))
         print(desc, np.round((auc, acc), 2))
         if desc == 'logit':
             logit_auc.append(auc)
