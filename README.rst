@@ -2,10 +2,10 @@
 
 |ReadTheDocs|_
 
-.. |ReadTheDocs| image:: https://readthedocs.org/projects/sppam/badge/?version=latest
-.. _ReadTheDocs: https://sppam.readthedocs.io/en/latest/?badge=latest
+.. |ReadTheDocs| image:: https://readthedocs.org/projects/score_regression/badge/?version=latest
+.. _ReadTheDocs: https://score_regression.readthedocs.io/en/latest/?badge=latest
 
-SPPAM - Saddle point problem for AUC maximization
+ScoreRegression - Saddle point problem for AUC maximization
 ============================================================
 
 An AUC optimizing binomial classifier.
@@ -16,17 +16,17 @@ Rolf Carlson hrolfrc@gmail.com
 
 Install
 ------------------
-Use pip to install sppam.
+Use pip to install score_regression.
 
-``pip install sppam``
+``pip install score_regression``
 
 Introduction
 ------------------
 This is a python implementation of a classifier that endeavors to solve the `saddle point problem for AUC maximization`_. [1]
 
-SPPAM provides classification and prediction for two classes, the binomial case.  Small to medium problems are supported.  This is research code and a work in progress.
+ScoreRegression provides classification and prediction for two classes, the binomial case.  Small to medium problems are supported.  This is research code and a work in progress.
 
-SPPAM is designed for use with scikit-learn_ pipelines and composite estimators.
+ScoreRegression is designed for use with scikit-learn_ pipelines and composite estimators.
 
 .. _scikit-learn: https://scikit-learn.org
 
@@ -37,7 +37,7 @@ Example
 
 .. code:: ipython2
 
-    from sppam import SPPAM
+    from score_regression import ScoreRegression
     from sklearn.datasets import make_classification
     from sklearn.model_selection import train_test_split
 
@@ -62,7 +62,7 @@ Train the classifier
 
 .. code:: ipython2
 
-    cls = SPPAM().fit(X_train, y_train)
+    cls = ScoreRegression().fit(X_train, y_train)
 
 Get the score on unseen data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

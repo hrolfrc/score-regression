@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/sppam.iml" filepath="$PROJECT_DIR$/.idea/sppam.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/score-regression.iml" filepath="$PROJECT_DIR$/.idea/score-regression.iml" />
     </modules>
   </component>
 </project>

@@ -1,10 +1,10 @@
 ####################
-SPPAM API
+ScoreRegression API
 ####################
 
-The SPPAM (Saddle Point Problem for AUC Maximization) API
+The ScoreRegression (Saddle Point Problem for AUC Maximization) API
 
-.. currentmodule:: sppam
+.. currentmodule:: score_regression
 
 
 Classifier
@@ -14,4 +14,4 @@ Classifier
    :toctree: generated/
    :template: class.rst
 
-    SPPAM
+    ScoreRegression

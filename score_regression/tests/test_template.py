@@ -1,7 +1,7 @@
 import pytest
 from sklearn.datasets import load_iris
 
-from sppam import SPPAM
+from score_regression import ScoreRegression
 
 
 @pytest.fixture
@@ -9,9 +9,9 @@ def data():
     return load_iris(return_X_y=True)
 
 
-def test_SPPAM(data):
+def test_ScoreRegression(data):
     X, y = data
-    clf = SPPAM()
+    clf = ScoreRegression()
 
     clf.fit(X, y)
     assert hasattr(clf, 'classes_')

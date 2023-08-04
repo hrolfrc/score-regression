@@ -3,10 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to sppam's documentation!
+Welcome to score_regression's documentation!
 ============================================
 
-This project develops the SPPAM classifier.
+This project develops the ScoreRegression classifier.
 
 .. toctree::
    :maxdepth: 2
@@ -33,7 +33,7 @@ This project develops the SPPAM classifier.
 `Getting started <quick_start.html>`_
 -------------------------------------
 
-Information regarding SPPAM
+Information regarding ScoreRegression
 
 `User Guide <user_guide.html>`_
 -------------------------------
