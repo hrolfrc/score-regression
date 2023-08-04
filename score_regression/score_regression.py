@@ -314,15 +314,15 @@ def hv_max(X, y, w, c):
     return random.random(), random.random()
 
 
-def objective(X, y, w):
+def objective(X, y, weight, w_c):
     """ Find the auc of the weights and candidate vertex.
 
     Arguments:
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
-        w : vetted weights
-        c : candidate weight
+        weight : vetted weights
+        w_c : candidate weight
 
         Examples:
             >>> from sklearn.datasets import make_classification
@@ -340,15 +340,16 @@ def objective(X, y, w):
     # possibly an ndarray.  Cast w.
     # z = np.asarray(w) + [c]
     # y_p = predict(X, w)
+    # w_c is a float array.  Extract the float and make it a list
     try:
-        auc = roc_auc_score(y_true=y, y_score=predict(X, w))
+        auc = roc_auc_score(y_true=y, y_score=predict(X, weight + w_c.tolist()))
     except ValueError:
         auc = 0
 
     return -auc
 
 
-def opt_auc(X, y):
+def opt_auc(X, y, weight):
     """Find the weight that maximizes auc.
 
     Negate the auc from hv_candidate as hv_candidate_min
@@ -359,8 +360,7 @@ def opt_auc(X, y):
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
-        w : vetted weights
-        x0 : candidate weight
+        weight : vetted weights
 
     Examples:
         >>> from sklearn.datasets import make_classification
@@ -415,11 +415,10 @@ def opt_auc(X, y):
         res = minimize(
             functools.partial(
                 objective,
-                X, y
+                X, y, weight
             ),
-            x0=np.random.default_rng().uniform(-1, 1, X.shape[1]),
+            x0=0,
             method='powell',
-            # bounds=[(-20, 20)],
             options={'xtol': 1e-6, 'maxiter': 1e4, 'disp': False}
         )
     except ValueError as err:
@@ -427,12 +426,12 @@ def opt_auc(X, y):
         # return auc == 0 and the initial condition, x0,
         # as a reasonable guess for w. The feature will be
         # skipped anyway because of the low auc.
-        opt_fun, opt_w = 0, [0] * X.shape[1]
+        opt_fun, opt_w = 0, 0
         pass
     else:
         # res.x is an array, such as array([-1.05572788])
         # return a float
-        opt_fun, opt_w = -res.fun, res.x[-1]
+        opt_fun, opt_w = -res.fun, res.x[0]
 
     print('finished opt_auc')
     return opt_fun, opt_w
@@ -552,20 +551,24 @@ def phase_1_best_tuples(X, y):
     return best
 
 
-def fit_mp_helper(X, y, taken, col):
+def fit_mp_helper(X, y, weight, taken, col):
     X_c = X[:, taken + [col]]
-    auc, w_c = opt_auc(X_c, y)
+
+    # we are going to be optimizing one position for col
+    assert X_c.shape[1] - 1 == len(weight)
+
+    auc, w_c = opt_auc(X_c, y, weight)
     return auc, col, w_c
 
 
-def fit_mp(X, y, taken, available):
+def fit_mp(X, y, weight, taken, available):
     """ fit multiprocess
 
     Examples:
         >>> fit_mp()
 
     """
-    f = functools.partial(fit_mp_helper, X, y, taken)
+    f = functools.partial(fit_mp_helper, X, y, weight, taken)
     candidates = []
     with multiprocessing.Pool(processes=40, maxtasksperchild=1000) as pool:
         iter_obj = pool.imap_unordered(f, available)
@@ -607,7 +610,7 @@ def phase_1_best_tuples_mp(X, y):
 
     while available := set(feature_range).difference(set(taken)):
         print('available ', available)
-        candidates = fit_mp(X, y, taken, available)
+        candidates = fit_mp(X, y, weight, taken, available)
 
         winner = sorted(candidates, reverse=True)[0]
         taken.append(winner[1])
