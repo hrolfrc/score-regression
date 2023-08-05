@@ -4,7 +4,6 @@ The ScoreRegression and ScoreRegressionCV classifiers
 """
 import functools
 import multiprocessing
-import pprint
 
 import numpy as np
 from scipy.optimize import minimize
@@ -21,6 +20,72 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 def predict(X, w):
     return np.sum(np.multiply(X, w), 1)
 
+
+# =============================================================
+#   Phase 2, weight refinement
+# =============================================================
+
+
+def objective_phase_2(X, y, weight):
+    """ Find the auc of the weights and candidate vertex.
+
+    Arguments:
+        X : array-like, shape (n_samples, n_features)
+            The training input features and samples.
+        y : ground truth vector
+        weight : vetted weights
+
+    """
+    # w_c is a float array.  Extract the float and make it a list
+    try:
+        auc = roc_auc_score(y_true=y, y_score=predict(X, weight))
+    except ValueError:
+        auc = 0
+
+    return -auc
+
+
+def opt_auc_phase_2(X, y, weight):
+    """Find the weight that maximizes auc.
+
+
+    Arguments:
+        X : array-like, shape (n_samples, n_features)
+            The training input features and samples.
+        y : ground truth vector
+        weight : vetted weights
+
+    """
+    print('starting opt_auc')
+    # define the partial function for the optimization
+    # of auc over a weight range.
+    try:
+        res = minimize(
+            functools.partial(
+                objective_phase_2,
+                X, y
+            ),
+            x0=np.add(weight, np.random.default_rng().uniform(-1, 1, len(weight))),
+            method='Nelder-Mead',
+            options={'maxiter': 1e4, 'disp': False}
+        )
+    except ValueError:
+        # powell can raise a ValueError, in which case
+        # return auc == 0 and the initial condition, x0,
+        # as a reasonable guess for w. The feature will be
+        # skipped anyway because of the low auc.
+        opt_fun, opt_w = 0, [0] * X.shape[1]
+        pass
+    else:
+        # res.x is an array, such as array([-1.05572788])
+        # return a float
+        opt_fun, opt_w = -res.fun, res.x
+    return opt_fun, opt_w
+
+
+# =============================================================
+#   Phase 1, sequential weight optimization
+# =============================================================
 
 def objective(X, y, weight, w_c):
     """ Find the auc of the weights and candidate vertex.
@@ -56,9 +121,6 @@ def opt_auc(X, y, weight):
         weight : vetted weights
 
     """
-    print('starting opt_auc')
-    # define the partial function for the optimization
-    # of auc over a weight range.
     try:
         res = minimize(
             functools.partial(
@@ -80,8 +142,6 @@ def opt_auc(X, y, weight):
         # res.x is an array, such as array([-1.05572788])
         # return a float
         opt_fun, opt_w = -res.fun, res.x[0]
-
-    print('finished opt_auc')
     return opt_fun, opt_w
 
 
@@ -115,10 +175,6 @@ def fit_mp(X, y, weight, taken, available):
             except multiprocessing.TimeoutError:
                 print("Timeout exceeding 5 seconds.  Skipping fit...")
             else:
-                print('********************************************************')
-                print(result)
-                print('********************************************************')
-                # write to a table.
                 if result:
                     candidates.append(result)
     return candidates
@@ -128,7 +184,6 @@ def phase_1_best_tuples_mp(X, y):
     """ Get the best tuples according to AUC.
 
     """
-    print('starting phase_1_best_tuples')
     # feature range is the column index
     feature_range = list(range(X.shape[1]))
 
@@ -151,18 +206,13 @@ def phase_1_best_tuples_mp(X, y):
         else:
             best_auc += [max_auc]
             best.append([max_auc, taken.copy(), weight.copy()])
-            print('best auc ', max_auc)
-            print('best columns ', winner[1])
-
-    print('finished phase_1_best_tuples')
-
     return best
 
 
 # noinspection PyAttributeOutsideInit
 class ScoreRegression(ClassifierMixin, BaseEstimator):
-    def __init__(self, verbose=False):
-        self.verbose_ = verbose
+    def __init__(self):
+        pass
 
     def fit(self, X, y):
         if y is None:
@@ -190,32 +240,26 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         self.progress_['phase_1']['columns'] = winner[1]
         self.progress_['phase_1']['weights'] = winner[2]
 
-        # ===================================================
-        #                   Phase 2
-        #   Optimize over the most important features
-        # ===================================================
-        # best = phase_2_incremental_weight_refinement(X, y, best)
-        # self.progress_['phase_2'] = {}
-        # self.progress_['phase_2']['best_outcomes'] = best
-        #
-        # # get the best outcome for phase 2
-        # winner = sorted(best, reverse=True)[0]
-        # self.progress_['phase_2']['auc'] = winner[0]
-        # self.progress_['phase_2']['columns'] = winner[1]
-        # self.progress_['phase_2']['weights'] = winner[2]
-
-        # get the best outcome over all column subsets
-        # the winning features are likely to be a subset of
-        # all features.
         self.auc_ = winner[0]
         self.columns_ = winner[1].copy()
         self.w_ = winner[2].copy()
 
-        if self.verbose_:
-            print('using columns ', self.columns_)
-            print('anticipated auc ', roc_auc_score(y_true=y, y_score=predict(X[:, self.columns_], self.w_)))
-            pprint.pprint(best)
-            pprint.pprint(self.progress_)
+        # ===================================================
+        #                   Phase 2
+        #   Optimize over the most important features
+        # ===================================================
+
+        auc, weights = opt_auc_phase_2(X[:, self.columns_], y, self.w_)
+        if auc > self.auc_ and not np.isclose([auc], [self.auc_]):
+            print('Phase 2 improved on phase 1: ', auc, ' > ', self.auc_)
+            self.w_ = weights.copy()
+
+            self.progress_['phase_2'] = {}
+            self.progress_['phase_2']['auc'] = auc
+            self.progress_['phase_2']['columns'] = self.columns_
+            self.progress_['phase_2']['weights'] = weights
+        else:
+            print('No improvement from phase 2, keeping phase 1 answers.')
 
         self.is_fitted_ = True
         self.coef_ = self.w_
@@ -249,7 +293,6 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
     def predict_proba(self, X):
         check_is_fitted(self, ['is_fitted_', 'X_', 'y_'])
         X = check_array(X)
-
         y_proba = np.array(
             minmax_scale(
                 self.decision_function(X),
@@ -269,16 +312,8 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
 
 # noinspection PyAttributeOutsideInit
 class ScoreRegressionCV(ClassifierMixin, BaseEstimator):
-    def __init__(self, grid=(-1, 1), verbose=0):
-        """ Initialize CalfCV
-
-        Arguments:
-            grid : the search grid.  Default is (-1, 1).
-            verbose : 0, print nothing.  1-3 are increasingly verbose.
-
-        """
-        self.grid = grid
-        self.verbose = verbose
+    def __init__(self):
+        pass
 
     def fit(self, X, y):
         if y is None:
@@ -304,9 +339,8 @@ class ScoreRegressionCV(ClassifierMixin, BaseEstimator):
         # https://scikit-learn.org/stable/faq.html#id27
         self.model_ = GridSearchCV(
             estimator=self.pipeline_,
-            param_grid={'classifier__grid': [self.grid]},
-            scoring="roc_auc",
-            verbose=self.verbose
+            param_grid={},
+            scoring="roc_auc"
         )
 
         self.model_.fit(X, y)
@@ -317,12 +351,12 @@ class ScoreRegressionCV(ClassifierMixin, BaseEstimator):
         self.best_score_ = self.model_.best_score_
         self.best_coef_ = self.model_.best_estimator_['classifier'].coef_
 
-        if self.verbose > 0:
-            print()
-            print('=======================================')
-            print('Objective best score', self.best_score_)
-            print('Best coef_ ', self.best_coef_)
-            print('Objective best params', self.model_.best_params_)
+        # if self.verbose_ > 0:
+        #     print()
+        #     print('=======================================')
+        #     print('Objective best score', self.best_score_)
+        #     print('Best coef_ ', self.best_coef_)
+        #     print('Objective best params', self.model_.best_params_)
 
         return self
 

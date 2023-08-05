@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
-from score_regression import ScoreRegression
+from score_regression import ScoreRegression, ScoreRegressionCV
 
 logit_auc = []
 logit_acc = []
@@ -23,7 +23,7 @@ score_regression_auc = []
 score_regression_acc = []
 
 rng = np.random.RandomState(11)
-for _ in range(3):
+for _ in range(20):
     # Make a classification problem
     X, y_d = make_classification(
         n_samples=100,
@@ -37,8 +37,7 @@ for _ in range(3):
     scaler = StandardScaler()
     X_d = scaler.fit_transform(X)
 
-    for desc, clf in [('logit', LogisticRegression(max_iter=10000)), ('ScoreRegression', ScoreRegression())]:
-        # lp = clf.fit(X_d, y_d).predict_proba(X_d)
+    for desc, clf in [('logit', LogisticRegression(max_iter=10000)), ('ScoreRegressionCV', ScoreRegression())]:
         clf.fit(X_d, y_d)
         auc = roc_auc_score(y_true=y_d, y_score=clf.predict_proba(X_d)[:, 1])
         acc = accuracy_score(y_true=y_d, y_pred=clf.predict(X_d))
