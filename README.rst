@@ -22,7 +22,7 @@ Use pip to install score_regression.
 
 Introduction
 ------------------
-This is a python implementation of a classifier that maximizes AUC.  The idea is to relax the requirement from CALF_ that the weights be integers in [-1, 0, 1] and allow the weights to be any real number.
+This is a python implementation of a classifier that maximizes AUC.  The idea is to find the features that maximize AUC, analogous to CALF_, but relax the requirement that the weights be integers in [-1, 0, 1] and instead allow the weights to be any real number.
 
 ScoreRegression provides classification and prediction for two classes, the binomial case.  Small to medium problems are supported.  This is research code and a work in progress.
 
