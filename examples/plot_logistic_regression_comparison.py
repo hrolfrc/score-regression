@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
-from score_regression import ScoreRegression, ScoreRegressionCV
+from score_regression import ScoreRegression
 
 logit_auc = []
 logit_acc = []
