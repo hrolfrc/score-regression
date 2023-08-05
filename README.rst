@@ -5,7 +5,7 @@
 .. |ReadTheDocs| image:: https://readthedocs.org/projects/score_regression/badge/?version=latest
 .. _ReadTheDocs: https://score_regression.readthedocs.io/en/latest/?badge=latest
 
-ScoreRegression - Saddle point problem for AUC maximization
+ScoreRegression - A classifier that maximizes AUC
 ============================================================
 
 An AUC optimizing binomial classifier.
@@ -22,7 +22,7 @@ Use pip to install score_regression.
 
 Introduction
 ------------------
-This is a python implementation of a classifier that endeavors to solve the `saddle point problem for AUC maximization`_. [1]
+This is a python implementation of a classifier that maximizes AUC.  The idea is to relax the requirement from CALF_ that the weights be integers in [-1, 0, 1] and allow the weights to be any real number.
 
 ScoreRegression provides classification and prediction for two classes, the binomial case.  Small to medium problems are supported.  This is research code and a work in progress.
 
@@ -30,7 +30,7 @@ ScoreRegression is designed for use with scikit-learn_ pipelines and composite e
 
 .. _scikit-learn: https://scikit-learn.org
 
-.. _`saddle point problem for AUC maximization`: https://www.frontiersin.org/articles/10.3389/fams.2019.00030/full
+.. _CALF: https://www.nature.com/articles/s41598-022-09415-2
 
 Example
 ------------------
@@ -78,6 +78,6 @@ Get the score on unseen data
 
 References
 ------------------
-[1] Natole Jr, Michael & Ying, Yiming & Lyu, Siwei. (2019).
-Stochastic AUC Optimization Algorithms With Linear Convergence.
-Frontiers in Applied Mathematics and Statistics. 5. 10.3389/fams.2019.00030.
+[1] Jeffries, C.D., Ford, J.R., Tilson, J.L. et al.
+A greedy regression algorithm with coarse weights offers novel advantages.
+Sci Rep 12, 5440 (2022). https://doi.org/10.1038/s41598-022-09415-2

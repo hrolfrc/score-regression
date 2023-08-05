@@ -37,7 +37,7 @@ from setuptools import find_packages, setup
 from score_regression import _version
 
 DISTNAME = 'score_regression'
-DESCRIPTION = 'A classifier that endeavors to solve the saddle point problem for AUC maximization.'
+DESCRIPTION = 'A classifier that maximizes AUC'
 with codecs.open('README.rst', encoding='utf-8-sig') as f:
     LONG_DESCRIPTION = f.read()
 MAINTAINER = 'Carlson Research, LLC'

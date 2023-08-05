@@ -56,7 +56,6 @@ def opt_auc_phase_2(X, y, weight):
         weight : vetted weights
 
     """
-    print('starting opt_auc')
     # define the partial function for the optimization
     # of auc over a weight range.
     try:
@@ -195,7 +194,6 @@ def phase_1_best_tuples_mp(X, y):
     best_auc = []
 
     while available := set(feature_range).difference(set(taken)):
-        print('available ', available)
         candidates = fit_mp(X, y, weight, taken, available)
         winner = sorted(candidates, reverse=True)[0]
         taken.append(winner[1])
