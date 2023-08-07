@@ -4,6 +4,7 @@ The ScoreRegression and ScoreRegressionCV classifiers
 """
 import functools
 import multiprocessing
+import time
 
 import numpy as np
 from scipy.optimize import minimize
@@ -209,10 +210,93 @@ def phase_1_best_tuples_mp(X, y):
 
 # noinspection PyAttributeOutsideInit
 class ScoreRegression(ClassifierMixin, BaseEstimator):
+    """ ScoreRegression classifier
+
+    ScoreRegression fits a linear model with coefficients  w = (w1, ..., wp)
+    to maximize the AUC of the targets predicted by the linear function.
+
+    Attributes
+    ----------
+        coef_ : array of shape (n_features, )
+            Estimated coefficients for the linear fit problem.  Only
+            one target should be passed, and this is a 1D array of length
+            n_features.
+
+        auc_ : float
+            The score of the best estimator.
+
+        columns_ : array of shape (<= n_features, )
+            The feature indices that contribute to a positive increase in auc.
+
+        n_features_in_ : int
+            Number of features seen during :term:`fit`.
+
+        classes_ : list
+            The unique class labels
+
+        fit_time_ : float
+            The number of seconds to fit X to y
+
+    Notes
+    -----
+        The feature matrix must be centered at 0.  This can be accomplished with
+        sklearn.preprocessing.StandardScaler, or similar.  No intercept is calculated.
+
+    Examples
+    --------
+        >>> import numpy
+        >>> from calfcv import Calf
+        >>> from sklearn.datasets import make_classification as mc
+        >>> X, y = mc(n_features=2, n_redundant=0, n_informative=2, n_clusters_per_class=1, random_state=42)
+        >>> numpy.round(X[0:3, :], 2)
+        array([[ 1.23, -0.76],
+               [ 0.7 , -1.38],
+               [ 2.55,  2.5 ]])
+
+        >>> y[0:3]
+        array([0, 0, 1])
+
+        >>> cls = ScoreRegression().fit(X, y)
+        >>> cls.score(X, y)
+        0.7
+
+        >>> cls.best_coef_
+        [1, 1]
+
+        >>> numpy.round(cls.best_score_, 2)
+        0.82
+
+        >>> cls.fit_time_ > 0
+        True
+
+        >>> cls.predict(np.array([[3, 5]]))
+        array([0])
+
+        >>> cls.predict_proba(np.array([[3, 5]]))
+        array([[1., 0.]])
+
+        """
+
     def __init__(self):
-        pass
+        """ Initialize ScoreRegression """
 
     def fit(self, X, y):
+        """ Fit the model according to the given training data.
+
+        Parameters
+        ----------
+            X : {array-like, sparse matrix} of shape (n_samples, n_features)
+                Training vector, where n_samples is the number of samples and n_features is the number of features.
+
+            y : array-like of shape (n_samples,)
+                Target vector relative to X.
+
+        Returns
+        -------
+            self
+                Fitted estimator.
+
+        """
         if y is None:
             raise ValueError('requires y to be passed, but the target y is None')
 
@@ -230,6 +314,7 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         #
         #   Find the features and weights that increase AUC.
         # ===================================================
+        start = time.time()
         best = phase_1_best_tuples_mp(X, y)
         winner = sorted(best, reverse=True)[0]
         self.progress_ = {'phase_1': {}}
@@ -248,22 +333,31 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         # ===================================================
 
         auc, weights = opt_auc_phase_2(X[:, self.columns_], y, self.w_)
+        self.fit_time_ = time.time() - start
         if auc > self.auc_ and not np.isclose([auc], [self.auc_]):
-            print('Phase 2 improved on phase 1: ', auc, ' > ', self.auc_)
             self.w_ = weights.copy()
-
             self.progress_['phase_2'] = {}
             self.progress_['phase_2']['auc'] = auc
             self.progress_['phase_2']['columns'] = self.columns_
             self.progress_['phase_2']['weights'] = weights
-        else:
-            print('No improvement from phase 2, keeping phase 1 answers.')
 
         self.is_fitted_ = True
         self.coef_ = self.w_
         return self
 
     def decision_function(self, X):
+        """ Identify confidence scores for the samples
+
+        Parameters
+        ----------
+            X : array-like, shape (n_samples, n_features)
+                The training input features and samples
+
+        Returns
+        -------
+            y_d : the decision vector (n_samples)
+
+        """
         check_is_fitted(self, ['is_fitted_', 'X_', 'y_'])
 
         X = self._validate_data(X, accept_sparse="csr", reset=False)
@@ -276,6 +370,19 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         return scores
 
     def predict(self, X):
+        """Predict class labels for samples in X.
+
+        Parameters
+        ----------
+            X : {array-like, sparse matrix} of shape (n_samples, n_features)
+                The data matrix for which we want to get the predictions.
+
+        Returns
+        -------
+            y_pred : ndarray of shape (n_samples,)
+                Vector containing the class labels for each sample.
+
+        """
         check_is_fitted(self, ['is_fitted_', 'X_', 'y_'])
         X = check_array(X)
 
@@ -289,6 +396,21 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         return np.array(y_class)
 
     def predict_proba(self, X):
+        """Probability estimates for samples in X.
+
+        Parameters
+        ----------
+            X : array-like of shape (n_samples, n_features)
+                Vector to be scored, where n_samples is the number of samples and
+                n_features is the number of features.
+
+        Returns
+        -------
+            T : array-like of shape (n_samples, n_classes)
+                Returns the probability of the sample for each class in the model,
+                where classes are ordered as they are in `self.classes_`.
+
+        """
         check_is_fitted(self, ['is_fitted_', 'X_', 'y_'])
         X = check_array(X)
         y_proba = np.array(
@@ -300,6 +422,44 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
         class_prob = np.column_stack((1 - y_proba, y_proba))
         return class_prob
 
+    def transform(self, X):
+        """ Reduce X to the features that contribute positive AUC.
+
+        Parameters
+        ----------
+            X : array-like, shape (n_samples, n_features)
+                The training input features and samples
+
+        Returns
+        -------
+            X_r : array of shape [n_samples, n_selected_features]
+                The input samples with only the selected features.
+
+        """
+        check_is_fitted(self, ['is_fitted_', 'X_', 'y_'])
+        X = check_array(X)
+
+        return X[:, np.asarray(self.coef_).nonzero()]
+
+    def fit_transform(self, X, y):
+        """ Fit to the data, then reduce X to the features that contribute positive AUC.
+
+        Parameters
+        ----------
+            X : array-like, shape (n_samples, n_features)
+                The training input features and samples
+
+            y : array-like of shape (n_samples,)
+                Target vector relative to X.
+
+        Returns
+        -------
+            X_r : array of shape [n_samples, n_selected_features]
+                The input samples with only the selected features.
+
+        """
+        return self.fit(X, y).transform(X)
+
     def _more_tags(self):
         return {
             'poor_score': True,
@@ -310,10 +470,90 @@ class ScoreRegression(ClassifierMixin, BaseEstimator):
 
 # noinspection PyAttributeOutsideInit
 class ScoreRegressionCV(ClassifierMixin, BaseEstimator):
+    """ ScoreRegressionCV classifier
+
+    ScoreRegressionCV fits a linear model with coefficients  w = (w1, ..., wp)
+    to maximize the AUC of the targets predicted by the linear function.
+
+    Attributes
+    ----------
+        best_coef_ : array of shape (n_features, )
+            Estimated coefficients for the linear fit problem.  Only
+            one target should be passed, and this is a 1D array of length
+            n_features.
+
+        best_score_ : float
+            The score of the best estimator.
+
+        n_features_in_ : int
+            Number of features seen during :term:`fit`.
+
+        classes_ : list
+            The unique class labels
+
+        fit_time_ : float
+            The number of seconds to fit X to y
+
+    Notes
+    -----
+        The feature matrix must be centered at 0.  This can be accomplished with
+        sklearn.preprocessing.StandardScaler, or similar.  No intercept is calculated.
+
+    Examples
+    --------
+        >>> import numpy
+        >>> from calfcv import Calf
+        >>> from sklearn.datasets import make_classification as mc
+        >>> X, y = mc(n_features=2, n_redundant=0, n_informative=2, n_clusters_per_class=1, random_state=42)
+        >>> numpy.round(X[0:3, :], 2)
+        array([[ 1.23, -0.76],
+               [ 0.7 , -1.38],
+               [ 2.55,  2.5 ]])
+
+        >>> y[0:3]
+        array([0, 0, 1])
+
+        >>> cls = ScoreRegression().fit(X, y)
+        >>> cls.score(X, y)
+        0.7
+
+        >>> cls.best_coef_
+        [1, 1]
+
+        >>> numpy.round(cls.best_score_, 2)
+        0.82
+
+        >>> cls.fit_time_ > 0
+        True
+
+        >>> cls.predict(np.array([[3, 5]]))
+        array([0])
+
+        >>> cls.predict_proba(np.array([[3, 5]]))
+        array([[1., 0.]])
+
+        """
     def __init__(self):
-        pass
+        """ Initialize ScoreRegressionCV """
 
     def fit(self, X, y):
+        """ Fit the model according to the given training data.
+
+        Parameters
+        ----------
+            X : {array-like, sparse matrix} of shape (n_samples, n_features)
+                Training vector, where n_samples is the number of samples and n_features is the number of features.
+
+            y : array-like of shape (n_samples,)
+                Target vector relative to X.
+
+        Returns
+        -------
+            self
+                Fitted estimator.
+
+        """
+
         if y is None:
             raise ValueError('requires y to be passed, but the target y is None')
 
@@ -341,34 +581,106 @@ class ScoreRegressionCV(ClassifierMixin, BaseEstimator):
             scoring="roc_auc"
         )
 
+        # fit and time the fit
+        start = time.time()
         self.model_.fit(X, y)
-        self.is_fitted_ = True
+        self.fit_time_ = time.time() - start
 
         # "best_score_: Mean cross-validated score of the best_estimator"
         # "https://stackoverflow.com/a/50233868/12865125"
         self.best_score_ = self.model_.best_score_
         self.best_coef_ = self.model_.best_estimator_['classifier'].coef_
 
-        # if self.verbose_ > 0:
-        #     print()
-        #     print('=======================================')
-        #     print('Objective best score', self.best_score_)
-        #     print('Best coef_ ', self.best_coef_)
-        #     print('Objective best params', self.model_.best_params_)
-
+        self.is_fitted_ = True
         return self
 
     def decision_function(self, X):
+        """ Identify confidence scores for the samples
+
+        Parameters
+        ----------
+            X : array-like, shape (n_samples, n_features)
+                The training input features and samples
+
+        Returns
+        -------
+            y_d : the decision vector (n_samples)
+
+        """
         check_is_fitted(self, ['is_fitted_', 'model_'])
         return self.model_.decision_function(X)
 
     def predict(self, X):
+        """Predict class labels for samples in X.
+
+        Parameters
+        ----------
+            X : {array-like, sparse matrix} of shape (n_samples, n_features)
+                The data matrix for which we want to get the predictions.
+
+        Returns
+        -------
+            y_pred : ndarray of shape (n_samples,)
+                Vector containing the class labels for each sample.
+
+        """
         check_is_fitted(self, ['is_fitted_', 'model_'])
         return self.model_.predict(X)
 
     def predict_proba(self, X):
+        """Probability estimates for samples in X.
+
+        Parameters
+        ----------
+            X : array-like of shape (n_samples, n_features)
+                Vector to be scored, where n_samples is the number of samples and
+                n_features is the number of features.
+
+        Returns
+        -------
+            T : array-like of shape (n_samples, n_classes)
+                Returns the probability of the sample for each class in the model,
+                where classes are ordered as they are in `self.classes_`.
+
+        """
         check_is_fitted(self, ['is_fitted_', 'model_'])
         return self.model_.predict_proba(X)
+
+    def transform(self, X):
+        """ Reduce X to the features that contribute positive AUC.
+
+        Parameters
+        ----------
+            X : array-like, shape (n_samples, n_features)
+                The training input features and samples
+
+        Returns
+        -------
+            X_r : array of shape [n_samples, n_selected_features]
+                The input samples with only the selected features.
+
+        """
+        check_is_fitted(self, ['is_fitted_', 'model_'])
+        return self.model_.transform(X)
+
+    def fit_transform(self, X, y):
+        """ Fit to the data, then reduce X to the features that contribute positive AUC.
+
+        Parameters
+        ----------
+            X : array-like, shape (n_samples, n_features)
+                The training input features and samples
+
+            y : array-like of shape (n_samples,)
+                Target vector relative to X.
+
+        Returns
+        -------
+            X_r : array of shape [n_samples, n_selected_features]
+                The input samples with only the selected features.
+
+        """
+        return self.fit(X, y).model_.transform(X)
 
     def _more_tags(self):
         return {
