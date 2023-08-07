@@ -1,9 +1,13 @@
 .. -*- mode: rst -*-
 
-|ReadTheDocs|_
+|CircleCI|_ |ReadTheDocs|_
 
-.. |ReadTheDocs| image:: https://readthedocs.org/projects/score_regression/badge/?version=latest
-.. _ReadTheDocs: https://score_regression.readthedocs.io/en/latest/?badge=latest
+.. |CircleCI| image:: https://circleci.com/gh/hrolfrc/calfcv.svg?style=shield
+.. _CircleCI: https://circleci.com/gh/hrolfrc/score-regression
+
+.. |ReadTheDocs| image:: https://readthedocs.org/projects/score-regression/badge/?version=latest
+.. _ReadTheDocs: https://score-regression.readthedocs.io/en/latest/?badge=latest
+
 
 ScoreRegression - A classifier that maximizes AUC
 ============================================================
@@ -18,7 +22,7 @@ Install
 ------------------
 Use pip to install score_regression.
 
-``pip install score_regression``
+``pip install score-regression``
 
 Introduction
 ------------------
