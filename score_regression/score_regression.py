@@ -1,6 +1,11 @@
 """
 The ScoreRegression and ScoreRegressionCV classifiers
 
+===============================================================
+Author: Rolf Carlson, Carlson Research, LLC <hrolfrc@gmail.com>
+License: 3-clause BSD
+===============================================================
+
 """
 import functools
 import multiprocessing

@@ -1,3 +1,11 @@
+""" Tests for score-regression
+
+===============================================================
+Author: Rolf Carlson, Carlson Research, LLC <hrolfrc@gmail.com>
+License: 3-clause BSD
+===============================================================
+
+"""
 import pytest
 from sklearn.datasets import load_iris
 from sklearn.datasets import make_classification
