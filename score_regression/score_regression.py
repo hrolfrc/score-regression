@@ -35,11 +35,16 @@ def predict(X, w):
 def objective_phase_2(X, y, weight):
     """ Find the auc of the weights and candidate vertex.
 
-    Arguments:
+    Parameters
+    ----------
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
         weight : vetted weights
+
+    Returns
+    -------
+        auc : the negative of the auc for function minimization
 
     """
     # w_c is a float array.  Extract the float and make it a list
@@ -55,7 +60,8 @@ def opt_auc_phase_2(X, y, weight):
     """Find the weight that maximizes auc.
 
 
-    Arguments:
+    Parameters
+    ----------
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
@@ -95,12 +101,18 @@ def opt_auc_phase_2(X, y, weight):
 def objective(X, y, weight, w_c):
     """ Find the auc of the weights and candidate vertex.
 
-    Arguments:
+    Parameters
+    ----------
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
         weight : vetted weights
         w_c : candidate weight
+
+
+    Returns
+    -------
+        auc : the negative of the auc for function minimization
 
     """
     # w_c is a float array.  Extract the float and make it a list
@@ -119,11 +131,16 @@ def opt_auc(X, y, weight):
     because we are minimizing.  Then negate the function value
     upon return.
 
-    Arguments:
+    Parameters
+    ----------
         X : array-like, shape (n_samples, n_features)
             The training input features and samples.
         y : ground truth vector
         weight : vetted weights
+
+    Returns
+    -------
+        auc : the negative of the auc for function minimization
 
     """
     try:
