@@ -1,9 +1,6 @@
 .. -*- mode: rst -*-
 
-|Codecov|_ |CircleCI|_ |ReadTheDocs|_
-
-.. |Codecov| image:: https://codecov.io/gh/hrolfrc/score-regression/branch/master/graph/badge.svg
-.. _Codecov: https://codecov.io/gh/hrolfrc/score-regression
+|CircleCI|_ |ReadTheDocs|_
 
 .. |CircleCI| image:: https://circleci.com/gh/hrolfrc/score-regression.svg?style=shield
 .. _CircleCI: https://circleci.com/gh/hrolfrc/score-regression
